@@ -1,0 +1,6 @@
+install.sh
+uninstall.sh
+.gitignore
+.DS_Store
+.cursor/
+.git/
