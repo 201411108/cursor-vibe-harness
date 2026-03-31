@@ -120,7 +120,7 @@ description: >-
 | 개발자 완료 후 | 변경 이력 기록 + 기획 문서 갱신 | `changes/{date}-{title}.md` + `features/` |
 | 유지보수 작업 시 | 기존 문서를 먼저 읽고 변경분 반영 | 해당 문서 |
 
-`.cursor/specs/` 폴더가 없으면 문서 기록을 생략하되, 사용자에게 `npx cursor-agent-harness init`으로 초기화할 수 있음을 안내한다.
+`.cursor/specs/` 폴더가 없으면 문서 기록을 생략하되, 사용자에게 `npx @hankim/cursor-vibe-harness init`으로 초기화할 수 있음을 안내한다.
 
 ## 바이패스 조건
 

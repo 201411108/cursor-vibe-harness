@@ -17,7 +17,8 @@ const SKILL_NAMES = [
 const SPECS_SUBDIRS = ["features", "changes", "decisions"];
 
 const args = process.argv.slice(2);
-const command = args.find((a) => !a.startsWith("-")) || "install";
+const showHelp = args.includes("--help") || args.includes("help");
+const command = showHelp ? "help" : args.find((a) => !a.startsWith("-")) || "install";
 const force = args.includes("--force");
 const global = args.includes("--global");
 
@@ -55,7 +56,7 @@ function install() {
   const skillsDir = getSkillsDir();
   const scope = getScopeLabel();
 
-  console.log("\n  Cursor Agent Harness Installer\n");
+  console.log("\n  Cursor Vibe Harness Installer\n");
   console.log(`  Scope: ${scope}\n`);
 
   fs.mkdirSync(skillsDir, { recursive: true });
@@ -90,7 +91,7 @@ function uninstall() {
   const skillsDir = getSkillsDir();
   const scope = getScopeLabel();
 
-  console.log("\n  Cursor Agent Harness Uninstaller\n");
+  console.log("\n  Cursor Vibe Harness Uninstaller\n");
   console.log(`  Scope: ${scope}\n`);
 
   let removed = 0;
@@ -113,7 +114,7 @@ function list() {
   const globalDir = path.join(os.homedir(), ".cursor", "skills");
   const projectDir = path.join(process.cwd(), ".cursor", "skills");
 
-  console.log("\n  Cursor Agent Harness Skills\n");
+  console.log("\n  Cursor Vibe Harness Skills\n");
 
   console.log("  [global] ~/.cursor/skills/");
   for (const skill of SKILL_NAMES) {
@@ -135,7 +136,7 @@ function list() {
 function init() {
   const specsDir = path.join(process.cwd(), ".cursor", "specs");
 
-  console.log("\n  Cursor Agent Harness - Specs Init\n");
+  console.log("\n  Cursor Vibe Harness - Specs Init\n");
   console.log(`  Project: ${process.cwd()}\n`);
 
   if (fs.existsSync(specsDir) && !force) {
@@ -176,7 +177,7 @@ function init() {
 
 function help() {
   console.log(`
-  cursor-agent-harness <command> [options]
+  cursor-vibe-harness <command> [options]
 
   Commands:
     install    Install skills to current project (default: local)
@@ -190,13 +191,13 @@ function help() {
     --help     Show this help message
 
   Examples:
-    npx cursor-agent-harness install              # project install (default)
-    npx cursor-agent-harness install --global     # global install
-    npx cursor-agent-harness install --force      # overwrite existing
-    npx cursor-agent-harness uninstall            # remove from project
-    npx cursor-agent-harness uninstall --global   # remove from global
-    npx cursor-agent-harness init                 # init specs folder
-    npx cursor-agent-harness list                 # check both scopes
+    npx @hankim/cursor-vibe-harness install              # project install (default)
+    npx @hankim/cursor-vibe-harness install --global     # global install
+    npx @hankim/cursor-vibe-harness install --force      # overwrite existing
+    npx @hankim/cursor-vibe-harness uninstall            # remove from project
+    npx @hankim/cursor-vibe-harness uninstall --global   # remove from global
+    npx @hankim/cursor-vibe-harness init                 # init specs folder
+    npx @hankim/cursor-vibe-harness list                 # check both scopes
 `);
 }
 
