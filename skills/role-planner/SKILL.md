@@ -116,7 +116,7 @@ WebSearch 도구를 활용하여:
 2. **기존 기획 갱신**: 기존 문서의 해당 섹션을 업데이트하고, 변경 이력에 갱신 내역을 추가한다
 3. **중요 결정**: 기획 과정에서 내린 주요 결정은 `.cursor/specs/decisions/{NNN}-{title}.md`에도 기록한다
 
-`.cursor/specs/` 폴더가 없으면 저장을 생략하되, 사용자에게 `npx @hankim/cursor-vibe-harness init`으로 초기화할 수 있음을 안내한다.
+`.cursor/specs/` 폴더가 없으면 저장을 생략하되, 사용자에게 `npx @hankim.dev/cursor-vibe-harness init`으로 초기화할 수 있음을 안내한다.
 
 ## 유의사항
 

@@ -191,13 +191,13 @@ function help() {
     --help     Show this help message
 
   Examples:
-    npx @hankim/cursor-vibe-harness install              # project install (default)
-    npx @hankim/cursor-vibe-harness install --global     # global install
-    npx @hankim/cursor-vibe-harness install --force      # overwrite existing
-    npx @hankim/cursor-vibe-harness uninstall            # remove from project
-    npx @hankim/cursor-vibe-harness uninstall --global   # remove from global
-    npx @hankim/cursor-vibe-harness init                 # init specs folder
-    npx @hankim/cursor-vibe-harness list                 # check both scopes
+    npx @hankim.dev/cursor-vibe-harness install              # project install (default)
+    npx @hankim.dev/cursor-vibe-harness install --global     # global install
+    npx @hankim.dev/cursor-vibe-harness install --force      # overwrite existing
+    npx @hankim.dev/cursor-vibe-harness uninstall            # remove from project
+    npx @hankim.dev/cursor-vibe-harness uninstall --global   # remove from global
+    npx @hankim.dev/cursor-vibe-harness init                 # init specs folder
+    npx @hankim.dev/cursor-vibe-harness list                 # check both scopes
 `);
 }
 
