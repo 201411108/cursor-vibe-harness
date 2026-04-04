@@ -1,9 +1,11 @@
 {
-  "name": "@hankim.dev/cursor-vibe-harness",
+  "name": "@hankim.dev/agent-workflow-orchestration",
   "version": "1.0.0",
-  "description": "Multi-role agent harness system for Cursor IDE - orchestrator, planner, designer, developer",
+  "description": "Multi-target role orchestration package for Cursor, Codex, and Claude",
   "keywords": [
     "cursor",
+    "codex",
+    "claude",
     "cursor-ide",
     "agent",
     "ai",
@@ -17,22 +19,33 @@
   "license": "MIT",
   "author": "handong",
   "bin": {
-    "cursor-vibe-harness": "bin/cli.js"
+    "agent-workflow-orchestration": "bin/cli.js"
+  },
+  "scripts": {
+    "validate": "node bin/cli.js validate",
+    "doctor": "node bin/cli.js doctor --target cursor",
+    "check:readme": "node scripts/check-readme.js",
+    "test:smoke": "node scripts/fixture-smoke.js",
+    "check": "npm run validate && npm run check:readme && npm run test:smoke",
+    "test": "npm run check"
   },
   "files": [
+    "adapters/",
     "bin/",
     "skills/",
     "templates/",
+    "scripts/",
+    "agent-workflow.manifest.json",
     "README.md",
     "LICENSE"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/201411108/cursor-vibe-harness.git"
+    "url": "git+https://github.com/201411108/agent-workflow-orchestration.git"
   },
-  "homepage": "https://github.com/201411108/cursor-vibe-harness#readme",
+  "homepage": "https://github.com/201411108/agent-workflow-orchestration#readme",
   "bugs": {
-    "url": "https://github.com/201411108/cursor-vibe-harness/issues"
+    "url": "https://github.com/201411108/agent-workflow-orchestration/issues"
   },
   "publishConfig": {
     "access": "public"

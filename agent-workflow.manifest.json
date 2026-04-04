@@ -1,0 +1,50 @@
+{
+  "name": "@hankim.dev/agent-workflow-orchestration",
+  "version": "1.0.0",
+  "skills": [
+    {
+      "name": "role-orchestrator",
+      "requiredInputs": ["user_request"],
+      "requiredOutputs": [
+        "task_classification",
+        "active_roles",
+        "role_handoff_blocks",
+        "final_summary"
+      ],
+      "requiredTools": ["file_read"],
+      "optionalTools": ["glob_search", "text_search"]
+    },
+    {
+      "name": "role-planner",
+      "requiredInputs": ["user_request"],
+      "requiredOutputs": [
+        "requirements",
+        "edge_cases",
+        "references",
+        "open_questions",
+        "handoff_notes"
+      ],
+      "requiredTools": ["file_read"],
+      "optionalTools": ["web_search", "glob_search", "structured_question"]
+    },
+    {
+      "name": "role-designer",
+      "requiredInputs": ["user_request"],
+      "requiredOutputs": [
+        "audit_findings",
+        "design_decisions",
+        "implementation_guidance",
+        "handoff_notes"
+      ],
+      "requiredTools": ["file_read"],
+      "optionalTools": ["browser", "text_search"]
+    },
+    {
+      "name": "role-developer",
+      "requiredInputs": ["user_request"],
+      "requiredOutputs": ["change_summary", "verification", "followups"],
+      "requiredTools": ["file_read", "file_edit"],
+      "optionalTools": ["text_search", "lint_runner", "test_runner", "task_subagent"]
+    }
+  ]
+}

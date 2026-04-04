@@ -1,0 +1,13 @@
+{
+  "target": "cursor",
+  "label": "Cursor Adapter",
+  "fileName": "SKILL.md",
+  "projectPaths": {
+    "skillsDir": ".cursor/skills",
+    "specsDir": ".cursor/specs"
+  },
+  "globalPaths": {
+    "skillsDir": ".cursor/skills",
+    "specsDir": ".cursor/specs"
+  }
+}

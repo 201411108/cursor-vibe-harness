@@ -4,33 +4,119 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const SOURCE_DIR = path.join(__dirname, "..", "skills");
-const TEMPLATES_DIR = path.join(__dirname, "..", "templates");
-
-const SKILL_NAMES = [
-  "orchestrator-harness",
-  "role-planner",
-  "role-designer",
-  "role-developer",
-];
-
+const ROOT_DIR = path.join(__dirname, "..");
+const SOURCE_DIR = path.join(ROOT_DIR, "skills");
+const TEMPLATES_DIR = path.join(ROOT_DIR, "templates");
+const ADAPTERS_DIR = path.join(ROOT_DIR, "adapters");
+const MANIFEST_PATH = path.join(ROOT_DIR, "agent-workflow.manifest.json");
+const STATE_DIRNAME = ".agent-workflow";
+const STATE_FILENAME = "state.json";
 const SPECS_SUBDIRS = ["features", "changes", "decisions"];
+const TARGETS = ["cursor", "codex", "claude"];
 
 const args = process.argv.slice(2);
 const showHelp = args.includes("--help") || args.includes("help");
-const command = showHelp ? "help" : args.find((a) => !a.startsWith("-")) || "install";
+const command = showHelp ? "help" : args.find((arg) => !arg.startsWith("-")) || "install";
 const force = args.includes("--force");
 const global = args.includes("--global");
+const target = getArgValue("--target") || "cursor";
+const cwd = process.cwd();
 
-function getSkillsDir() {
-  if (global) {
-    return path.join(os.homedir(), ".cursor", "skills");
+function getArgValue(flag) {
+  const index = args.indexOf(flag);
+  if (index === -1 || index === args.length - 1) {
+    return null;
   }
-  return path.join(process.cwd(), ".cursor", "skills");
+  return args[index + 1];
 }
 
-function getScopeLabel() {
-  return global ? "global (~/.cursor/skills/)" : `project (${process.cwd()})`;
+function readText(filePath) {
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function readJson(filePath) {
+  return JSON.parse(readText(filePath));
+}
+
+function writeJson(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function loadManifest() {
+  return readJson(MANIFEST_PATH);
+}
+
+function loadAdapter(targetName) {
+  if (!TARGETS.includes(targetName)) {
+    console.error(`  Unknown target: ${targetName}`);
+    console.error(`  Supported targets: ${TARGETS.join(", ")}`);
+    process.exit(1);
+  }
+  return readJson(path.join(ADAPTERS_DIR, `${targetName}.json`));
+}
+
+function loadAllAdapters() {
+  return TARGETS.map(loadAdapter);
+}
+
+function getProjectStatePath(projectRoot = cwd) {
+  return path.join(projectRoot, STATE_DIRNAME, STATE_FILENAME);
+}
+
+function loadProjectState(projectRoot = cwd) {
+  const statePath = getProjectStatePath(projectRoot);
+  if (!fs.existsSync(statePath)) {
+    return {
+      activeTarget: null,
+      installedTargets: [],
+      packageVersion: loadManifest().version,
+    };
+  }
+  return readJson(statePath);
+}
+
+function saveProjectState(state, projectRoot = cwd) {
+  if (global) {
+    return;
+  }
+  writeJson(getProjectStatePath(projectRoot), state);
+}
+
+function removeProjectState(projectRoot = cwd) {
+  const statePath = getProjectStatePath(projectRoot);
+  if (fs.existsSync(statePath)) {
+    fs.rmSync(path.dirname(statePath), { recursive: true, force: true });
+  }
+}
+
+function getTargetPaths(adapter, projectRoot = cwd) {
+  if (global) {
+    return {
+      skillsDir: path.join(os.homedir(), adapter.globalPaths.skillsDir),
+      specsDir: path.join(os.homedir(), adapter.globalPaths.specsDir),
+    };
+  }
+  return {
+    skillsDir: path.join(projectRoot, adapter.projectPaths.skillsDir),
+    specsDir: path.join(projectRoot, adapter.projectPaths.specsDir),
+  };
+}
+
+function getScopeLabel(adapter) {
+  if (global) {
+    return `global (~/${adapter.globalPaths.skillsDir})`;
+  }
+  return `project (${cwd})`;
+}
+
+function writeFileIfChanged(filePath, contents) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  if (!force && fs.existsSync(filePath)) {
+    return false;
+  }
+  fs.writeFileSync(filePath, contents);
+  return true;
 }
 
 function copyDirSync(src, dest) {
@@ -52,153 +138,458 @@ function rmDirSync(dir) {
   }
 }
 
+function parseSkill(skillName) {
+  const skillFile = path.join(SOURCE_DIR, skillName, "SKILL.md");
+  const contents = readText(skillFile);
+  const match = contents.match(/^---\n([\s\S]*?)\n---\n\n([\s\S]*)$/);
+  if (!match) {
+    throw new Error(`invalid frontmatter in ${skillFile}`);
+  }
+  return {
+    raw: contents,
+    frontmatter: match[1],
+    body: match[2],
+  };
+}
+
+function renderTargetRoleFile(adapter, skillName) {
+  const parsed = parseSkill(skillName);
+  if (adapter.target === "cursor") {
+    return parsed.raw;
+  }
+
+  const manifest = loadManifest();
+  const role = manifest.skills.find((entry) => entry.name === skillName);
+  const title = role ? role.name : skillName;
+  const requiredOutputs = role ? role.requiredOutputs.join(", ") : "";
+  const requiredTools = role ? role.requiredTools.join(", ") : "";
+  const optionalTools = role ? role.optionalTools.join(", ") : "";
+  const headerLabel = adapter.fileName === "CLAUDE.md" ? "Claude Role Contract" : "Codex Role Contract";
+
+  return [
+    `# ${headerLabel}: ${title}`,
+    "",
+    `Target: ${adapter.label}`,
+    `Source: skills/${skillName}/SKILL.md`,
+    "",
+    "## Contract Summary",
+    "",
+    `- required_outputs: ${requiredOutputs}`,
+    `- required_tools: ${requiredTools}`,
+    `- optional_tools: ${optionalTools}`,
+    "",
+    "## Source Frontmatter",
+    "",
+    "```yaml",
+    parsed.frontmatter,
+    "```",
+    "",
+    parsed.body,
+  ].join("\n");
+}
+
+function ensureProjectTargetAllowed(nextTarget, projectRoot = cwd) {
+  if (global) {
+    return;
+  }
+  const state = loadProjectState(projectRoot);
+  if (state.activeTarget && state.activeTarget !== nextTarget && !force) {
+    console.error(`  Active target is ${state.activeTarget}.`);
+    console.error(`  Use --target ${state.activeTarget} or pass --force to switch to ${nextTarget}.`);
+    process.exit(1);
+  }
+}
+
+function removeTargetArtifacts(targetName, projectRoot = cwd) {
+  const adapter = loadAdapter(targetName);
+  const paths = getTargetPaths(adapter, projectRoot);
+  const targetRoot = path.dirname(paths.skillsDir);
+  rmDirSync(targetRoot);
+}
+
+function updateProjectState(targetName, addTarget, projectRoot = cwd) {
+  if (global) {
+    return;
+  }
+  const state = loadProjectState(projectRoot);
+  const installed = new Set(state.installedTargets || []);
+  if (addTarget) {
+    installed.add(targetName);
+  } else {
+    installed.delete(targetName);
+  }
+  const installedTargets = Array.from(installed);
+  const nextState = {
+    activeTarget: addTarget ? targetName : installedTargets[0] || null,
+    installedTargets,
+    packageVersion: loadManifest().version,
+  };
+  if (!nextState.activeTarget && installedTargets.length === 0) {
+    removeProjectState(projectRoot);
+    return;
+  }
+  saveProjectState(nextState, projectRoot);
+}
+
 function install() {
-  const skillsDir = getSkillsDir();
-  const scope = getScopeLabel();
+  const adapter = loadAdapter(target);
+  const paths = getTargetPaths(adapter);
+  const manifest = loadManifest();
+  const currentState = loadProjectState();
 
-  console.log("\n  Cursor Vibe Harness Installer\n");
-  console.log(`  Scope: ${scope}\n`);
+  ensureProjectTargetAllowed(adapter.target);
 
-  fs.mkdirSync(skillsDir, { recursive: true });
+  if (!global && force && currentState.activeTarget && currentState.activeTarget !== adapter.target) {
+    removeTargetArtifacts(currentState.activeTarget);
+    updateProjectState(currentState.activeTarget, false);
+  }
+
+  console.log(`\n  ${adapter.label} Installer\n`);
+  console.log(`  Scope: ${getScopeLabel(adapter)}`);
+  console.log(`  Target: ${adapter.target}\n`);
+
+  fs.mkdirSync(paths.skillsDir, { recursive: true });
 
   let installed = 0;
   let skipped = 0;
 
-  for (const skill of SKILL_NAMES) {
-    const target = path.join(skillsDir, skill);
-    const source = path.join(SOURCE_DIR, skill);
+  for (const role of manifest.skills) {
+    const roleDir = path.join(paths.skillsDir, role.name);
+    const roleFile = path.join(roleDir, adapter.fileName);
 
-    if (fs.existsSync(target) && !force) {
-      console.log(`  [skip] ${skill} (already exists)`);
+    if (fs.existsSync(roleFile) && !force) {
+      console.log(`  [skip] ${role.name} (${adapter.fileName} already exists)`);
       skipped++;
-    } else {
-      if (force) rmDirSync(target);
-      copyDirSync(source, target);
-      console.log(`  [installed] ${skill}`);
-      installed++;
+      continue;
     }
+
+    if (force) {
+      rmDirSync(roleDir);
+    }
+
+    writeFileIfChanged(roleFile, renderTargetRoleFile(adapter, role.name));
+    console.log(`  [installed] ${role.name}`);
+    installed++;
+  }
+
+  if (!global) {
+    updateProjectState(adapter.target, true);
   }
 
   console.log(`\n  Done: ${installed} installed, ${skipped} skipped.`);
-  console.log("  Open a new Cursor chat to start using the harness system.\n");
-
-  if (skipped > 0 && !force) {
-    console.log("  Tip: Use --force to overwrite existing skills.\n");
-  }
+  console.log(`  Role files were written to ${paths.skillsDir}\n`);
 }
 
 function uninstall() {
-  const skillsDir = getSkillsDir();
-  const scope = getScopeLabel();
+  const adapter = loadAdapter(target);
+  const paths = getTargetPaths(adapter);
+  const manifest = loadManifest();
 
-  console.log("\n  Cursor Vibe Harness Uninstaller\n");
-  console.log(`  Scope: ${scope}\n`);
+  console.log(`\n  ${adapter.label} Uninstaller\n`);
+  console.log(`  Scope: ${getScopeLabel(adapter)}`);
+  console.log(`  Target: ${adapter.target}\n`);
 
   let removed = 0;
 
-  for (const skill of SKILL_NAMES) {
-    const target = path.join(skillsDir, skill);
-    if (fs.existsSync(target)) {
-      rmDirSync(target);
-      console.log(`  [removed] ${skill}`);
+  for (const role of manifest.skills) {
+    const roleDir = path.join(paths.skillsDir, role.name);
+    if (fs.existsSync(roleDir)) {
+      rmDirSync(roleDir);
+      console.log(`  [removed] ${role.name}`);
       removed++;
     } else {
-      console.log(`  [not found] ${skill}`);
+      console.log(`  [not found] ${role.name}`);
     }
   }
 
-  console.log(`\n  Done: ${removed} skills removed.\n`);
+  if (fs.existsSync(paths.skillsDir) && fs.readdirSync(paths.skillsDir).length === 0) {
+    rmDirSync(paths.skillsDir);
+  }
+
+  if (!global) {
+    updateProjectState(adapter.target, false);
+  }
+
+  console.log(`\n  Done: ${removed} roles removed.\n`);
 }
 
 function list() {
-  const globalDir = path.join(os.homedir(), ".cursor", "skills");
-  const projectDir = path.join(process.cwd(), ".cursor", "skills");
+  const manifest = loadManifest();
+  const adapters = target && args.includes("--target") ? [loadAdapter(target)] : loadAllAdapters();
 
-  console.log("\n  Cursor Vibe Harness Skills\n");
-
-  console.log("  [global] ~/.cursor/skills/");
-  for (const skill of SKILL_NAMES) {
-    const target = path.join(globalDir, skill);
-    const status = fs.existsSync(target) ? "installed" : "-";
-    console.log(`    ${skill} (${status})`);
+  console.log("\n  Agent Workflow Targets\n");
+  if (!global) {
+    const state = loadProjectState();
+    console.log(`  [state] activeTarget=${state.activeTarget || "-"} installed=${(state.installedTargets || []).join(",") || "-"}`);
+    console.log();
   }
 
-  console.log(`\n  [project] ${process.cwd()}/.cursor/skills/`);
-  for (const skill of SKILL_NAMES) {
-    const target = path.join(projectDir, skill);
-    const status = fs.existsSync(target) ? "installed" : "-";
-    console.log(`    ${skill} (${status})`);
+  for (const adapter of adapters) {
+    const projectPaths = getTargetPaths(adapter);
+    console.log(`  [${adapter.target}] ${adapter.label}`);
+    console.log(`    skills: ${projectPaths.skillsDir}`);
+    console.log(`    specs: ${projectPaths.specsDir}`);
+    for (const role of manifest.skills) {
+      const roleFile = path.join(projectPaths.skillsDir, role.name, adapter.fileName);
+      const status = fs.existsSync(roleFile) ? "installed" : "-";
+      console.log(`    ${role.name} (${status})`);
+    }
+    console.log();
   }
+}
 
-  console.log();
+function renderSpecsReadme(adapter) {
+  const template = readText(path.join(TEMPLATES_DIR, "specs-readme.md"));
+  return template
+    .replaceAll("{{SPECS_PATH}}", adapter.projectPaths.specsDir)
+    .replaceAll("{{TARGET_LABEL}}", adapter.label)
+    .replaceAll("{{TARGET_NAME}}", adapter.target);
 }
 
 function init() {
-  const specsDir = path.join(process.cwd(), ".cursor", "specs");
+  const adapter = loadAdapter(target);
+  const paths = getTargetPaths(adapter);
+  const currentState = loadProjectState();
 
-  console.log("\n  Cursor Vibe Harness - Specs Init\n");
-  console.log(`  Project: ${process.cwd()}\n`);
+  if (global) {
+    console.error("  init does not support --global. Use a project directory.");
+    process.exit(1);
+  }
 
-  if (fs.existsSync(specsDir) && !force) {
-    console.log("  [skip] .cursor/specs/ already exists.");
+  ensureProjectTargetAllowed(adapter.target);
+
+  if (force && currentState.activeTarget && currentState.activeTarget !== adapter.target) {
+    removeTargetArtifacts(currentState.activeTarget);
+    updateProjectState(currentState.activeTarget, false);
+  }
+
+  console.log(`\n  ${adapter.label} Specs Init\n`);
+  console.log(`  Project: ${cwd}`);
+  console.log(`  Target: ${adapter.target}\n`);
+
+  if (fs.existsSync(paths.specsDir) && !force) {
+    console.log(`  [skip] ${adapter.projectPaths.specsDir} already exists.`);
     console.log("  Tip: Use --force to reinitialize.\n");
     return;
   }
 
-  fs.mkdirSync(specsDir, { recursive: true });
+  fs.mkdirSync(paths.specsDir, { recursive: true });
 
   for (const sub of SPECS_SUBDIRS) {
-    const subDir = path.join(specsDir, sub);
+    const subDir = path.join(paths.specsDir, sub);
     fs.mkdirSync(subDir, { recursive: true });
-    const gitkeep = path.join(subDir, ".gitkeep");
-    if (!fs.existsSync(gitkeep)) {
-      fs.writeFileSync(gitkeep, "");
+    writeFileIfChanged(path.join(subDir, ".gitkeep"), "");
+  }
+
+  writeFileIfChanged(path.join(paths.specsDir, "README.md"), renderSpecsReadme(adapter));
+  writeFileIfChanged(
+    path.join(paths.specsDir, "features", "_example-feature.md"),
+    readText(path.join(TEMPLATES_DIR, "feature-template.md"))
+  );
+  writeFileIfChanged(
+    path.join(paths.specsDir, "changes", "_example-change.md"),
+    readText(path.join(TEMPLATES_DIR, "change-template.md"))
+  );
+  writeFileIfChanged(
+    path.join(paths.specsDir, "decisions", "000-example-decision.md"),
+    readText(path.join(TEMPLATES_DIR, "decision-template.md"))
+  );
+
+  updateProjectState(adapter.target, true);
+
+  console.log(`  [created] ${adapter.projectPaths.specsDir}`);
+  console.log("  [created] example docs");
+  console.log("\n  Done. Target-specific specs are ready.\n");
+}
+
+function validateSkill(skillName, manifestEntry) {
+  const skillFile = path.join(SOURCE_DIR, skillName, "SKILL.md");
+  const failures = [];
+
+  if (!fs.existsSync(skillFile)) {
+    failures.push(`missing file: skills/${skillName}/SKILL.md`);
+    return failures;
+  }
+
+  const contents = readText(skillFile);
+  const requiredTokens = [
+    `name: ${skillName}`,
+    "inputs:",
+    "outputs:",
+    "required_tools:",
+    "fallbacks:",
+    "## Inputs",
+    "## Outputs",
+  ];
+
+  for (const token of requiredTokens) {
+    if (!contents.includes(token)) {
+      failures.push(`skills/${skillName}/SKILL.md missing token: ${token}`);
     }
   }
 
-  const readmeSrc = path.join(TEMPLATES_DIR, "specs-readme.md");
-  const readmeDest = path.join(specsDir, "README.md");
-  if (fs.existsSync(readmeSrc)) {
-    fs.copyFileSync(readmeSrc, readmeDest);
+  if (manifestEntry) {
+    for (const output of manifestEntry.requiredOutputs) {
+      if (!contents.includes(output)) {
+        failures.push(`skills/${skillName}/SKILL.md missing required output key: ${output}`);
+      }
+    }
   }
 
-  console.log("  [created] .cursor/specs/");
-  console.log("  [created] .cursor/specs/features/");
-  console.log("  [created] .cursor/specs/changes/");
-  console.log("  [created] .cursor/specs/decisions/");
-  console.log("  [created] .cursor/specs/README.md");
-  console.log("\n  Done. Specs folder is ready as your Single Source of Truth.\n");
+  return failures;
+}
 
-  console.log("  Templates available in the package:");
-  console.log("    feature-template.md   - Feature spec template");
-  console.log("    change-template.md    - Change record template");
-  console.log("    decision-template.md  - Decision record (ADR) template\n");
+function validateAdapter(adapter, manifest) {
+  const failures = [];
+
+  if (!adapter.fileName || !adapter.projectPaths || !adapter.projectPaths.skillsDir || !adapter.projectPaths.specsDir) {
+    failures.push(`adapter ${adapter.target} is missing required path metadata`);
+  }
+
+  for (const role of manifest.skills) {
+    const rendered = renderTargetRoleFile(adapter, role.name);
+    for (const output of role.requiredOutputs) {
+      if (!rendered.includes(output)) {
+        failures.push(`adapter ${adapter.target} render for ${role.name} missing output key: ${output}`);
+      }
+    }
+    if (adapter.target === "cursor" && !rendered.includes("name:")) {
+      failures.push(`adapter ${adapter.target} render for ${role.name} must preserve source frontmatter`);
+    }
+    if (adapter.target === "codex" && !rendered.includes("Codex Role Contract")) {
+      failures.push(`adapter ${adapter.target} render for ${role.name} missing Codex header`);
+    }
+    if (adapter.target === "claude" && !rendered.includes("Claude Role Contract")) {
+      failures.push(`adapter ${adapter.target} render for ${role.name} missing Claude header`);
+    }
+  }
+
+  return failures;
+}
+
+function validate() {
+  console.log("\n  Agent Workflow Validation\n");
+
+  const failures = [];
+  const manifest = loadManifest();
+
+  if (!Array.isArray(manifest.skills) || manifest.skills.length === 0) {
+    failures.push("agent-workflow.manifest.json must declare at least one role");
+  }
+
+  for (const role of manifest.skills) {
+    failures.push(...validateSkill(role.name, role));
+  }
+
+  for (const adapter of loadAllAdapters()) {
+    failures.push(...validateAdapter(adapter, manifest));
+  }
+
+  const packageJson = readJson(path.join(ROOT_DIR, "package.json"));
+  for (const requiredEntry of ["templates/", "skills/", "agent-workflow.manifest.json", "adapters/"]) {
+    if (!packageJson.files.includes(requiredEntry)) {
+      failures.push(`package.json files must include "${requiredEntry}"`);
+    }
+  }
+
+  if (failures.length > 0) {
+    for (const failure of failures) {
+      console.error(`  [fail] ${failure}`);
+    }
+    console.error(`\n  Validation failed: ${failures.length} issue(s).\n`);
+    process.exit(1);
+  }
+
+  console.log("  [ok] core roles, adapters, and package metadata are consistent.\n");
+}
+
+function doctor() {
+  const adapter = loadAdapter(target);
+  const findings = [];
+  const packageJsonPath = path.join(cwd, "package.json");
+  const state = global ? null : loadProjectState();
+  const paths = getTargetPaths(adapter);
+
+  findings.push({
+    label: `${adapter.projectPaths.skillsDir}`,
+    ok: fs.existsSync(paths.skillsDir),
+    detail: fs.existsSync(paths.skillsDir) ? "present" : "missing (run install)",
+  });
+  findings.push({
+    label: `${adapter.projectPaths.specsDir}`,
+    ok: fs.existsSync(paths.specsDir),
+    detail: fs.existsSync(paths.specsDir) ? "present" : "missing (run init)",
+  });
+
+  if (!global) {
+    findings.push({
+      label: "active target state",
+      ok: !state.activeTarget || state.activeTarget === adapter.target,
+      detail: state.activeTarget
+        ? `activeTarget=${state.activeTarget}`
+        : "not initialized",
+    });
+  }
+
+  if (fs.existsSync(packageJsonPath)) {
+    const packageJson = readJson(packageJsonPath);
+    const scripts = packageJson.scripts || {};
+    findings.push({ label: "lint script", ok: Boolean(scripts.lint), detail: scripts.lint || "not found" });
+    findings.push({ label: "test script", ok: Boolean(scripts.test), detail: scripts.test || "not found" });
+    findings.push({
+      label: "typecheck script",
+      ok: Boolean(scripts.typecheck),
+      detail: scripts.typecheck || "not found",
+    });
+  } else {
+    findings.push({ label: "package.json", ok: false, detail: "missing" });
+  }
+
+  console.log(`\n  ${adapter.label} Doctor\n`);
+  console.log(`  Project: ${cwd}`);
+  console.log(`  Target: ${adapter.target}\n`);
+
+  let warnings = 0;
+  for (const finding of findings) {
+    const mark = finding.ok ? "ok" : "warn";
+    console.log(`  [${mark}] ${finding.label}: ${finding.detail}`);
+    if (!finding.ok) {
+      warnings++;
+    }
+  }
+
+  console.log(
+    warnings === 0
+      ? "\n  Doctor completed with no major issues.\n"
+      : "\n  Doctor completed with warnings. This target can run in degraded mode.\n"
+  );
 }
 
 function help() {
   console.log(`
-  cursor-vibe-harness <command> [options]
+  agent-workflow-orchestration <command> [options]
 
   Commands:
-    install    Install skills to current project (default: local)
-    uninstall  Remove installed skills
-    init       Initialize .cursor/specs/ folder in current project (SSoT)
-    list       Show skill installation status (both global & project)
+    install    Install role files for a target adapter
+    uninstall  Remove installed role files for a target adapter
+    init       Initialize target-specific specs docs
+    list       Show installation status for one or all targets
+    validate   Validate core roles, adapters, and package metadata
+    doctor     Inspect the current project for target-specific readiness
 
   Options:
-    --global   Install to global ~/.cursor/skills/ instead of project
-    --force    Overwrite existing skills / reinitialize specs
+    --target   cursor | codex | claude (default: cursor)
+    --global   Install to the target's global home directory
+    --force    Overwrite existing files or switch active target
     --help     Show this help message
 
   Examples:
-    npx @hankim.dev/cursor-vibe-harness install              # project install (default)
-    npx @hankim.dev/cursor-vibe-harness install --global     # global install
-    npx @hankim.dev/cursor-vibe-harness install --force      # overwrite existing
-    npx @hankim.dev/cursor-vibe-harness uninstall            # remove from project
-    npx @hankim.dev/cursor-vibe-harness uninstall --global   # remove from global
-    npx @hankim.dev/cursor-vibe-harness init                 # init specs folder
-    npx @hankim.dev/cursor-vibe-harness list                 # check both scopes
-`);
+    npx @hankim.dev/agent-workflow-orchestration install --target cursor
+    npx @hankim.dev/agent-workflow-orchestration install --target codex
+    npx @hankim.dev/agent-workflow-orchestration init --target claude
+    npx @hankim.dev/agent-workflow-orchestration doctor --target codex
+    npx @hankim.dev/agent-workflow-orchestration validate
+  `);
 }
 
 switch (command) {
@@ -213,6 +604,12 @@ switch (command) {
     break;
   case "list":
     list();
+    break;
+  case "validate":
+    validate();
+    break;
+  case "doctor":
+    doctor();
     break;
   case "--help":
   case "help":

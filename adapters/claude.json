@@ -1,0 +1,13 @@
+{
+  "target": "claude",
+  "label": "Claude Adapter",
+  "fileName": "CLAUDE.md",
+  "projectPaths": {
+    "skillsDir": ".claude/skills",
+    "specsDir": ".claude/specs"
+  },
+  "globalPaths": {
+    "skillsDir": ".claude/skills",
+    "specsDir": ".claude/specs"
+  }
+}

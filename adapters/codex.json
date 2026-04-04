@@ -1,0 +1,13 @@
+{
+  "target": "codex",
+  "label": "Codex Adapter",
+  "fileName": "AGENT.md",
+  "projectPaths": {
+    "skillsDir": ".codex/skills",
+    "specsDir": ".codex/specs"
+  },
+  "globalPaths": {
+    "skillsDir": ".codex/skills",
+    "specsDir": ".codex/specs"
+  }
+}
