@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40hankim.dev%2Fagent-workflow-orchestration.svg)](https://www.npmjs.com/package/@hankim.dev/agent-workflow-orchestration)
 
-[English](./README.md) | 한국어
+[English](../README.md) | 한국어
 
 Agent Workflow Orchestration은 Cursor, Codex, Claude에서 일관된 역할 기반 AI 워크플로를 설치하고 운영하기 위한 패키지입니다. 이 패키지는 에이전트 런타임을 제공하지 않습니다. 대신 역할 계약, target별 skill 파일, 그리고 AI가 함께 작성하고 소비하는 문서 기반 Single Source of Truth를 배치합니다.
 

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40hankim.dev%2Fagent-workflow-orchestration.svg)](https://www.npmjs.com/package/@hankim.dev/agent-workflow-orchestration)
 
-English | [한국어](./README.ko.md)
+English | [한국어](./docs/README.ko.md)
 
 Agent Workflow Orchestration installs a consistent role-based AI workflow for Cursor, Codex, and Claude. It does not provide an agent runtime. Instead, it lays down role contracts, target-specific skill files, and a document-based Single Source of Truth for AI-assisted planning, design, and implementation.
 
