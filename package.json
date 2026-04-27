@@ -37,6 +37,7 @@
     "scripts/",
     "agent-workflow.manifest.json",
     "README.md",
+    "README.ko.md",
     "LICENSE"
   ],
   "repository": {
